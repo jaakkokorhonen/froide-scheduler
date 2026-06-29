@@ -5,7 +5,8 @@ jos ei ole aktiivisia sessioita.
 
 Ajastettu Cloud Schedulerilla:
   - Käynnistys: klo 15:00 EET (UTC 12:00)  → activationPolicy=ALWAYS
-  - Tarkistus:  klo 16:00 EET (UTC 13:00)  → sammutus jos ei sessioita
+  - Tarkistus:  joka tunnin :45 (UTC :45)   → sammutus jos ei sessioita
+                cron: "45 * * * *"
 
 Käyttö:
     python manage.py check_and_shutdown_db

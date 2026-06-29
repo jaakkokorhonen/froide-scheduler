@@ -69,10 +69,12 @@ Käyttäjä → Django (Cloud Run)
 ### Cloud SQL -sammutus
 
 ```
-Cloud Scheduler (päivittäin klo 16:00 EET)
+Cloud Scheduler (joka tunti :45 — cron: "45 * * * *")
     → python manage.py check_and_shutdown_db
     → Aktiivisia sessioita? Ei → activationPolicy=NEVER
 ```
+
+Sammutus tapahtuu vain jos `django_session`-taulussa ei ole yhtään voimassa olevaa riviä (`expire_date > now()`). Yksikin aktiivinen sessio estää sammutuksen.
 
 ### Google/GitHub SSO
 
@@ -84,8 +86,8 @@ Ks. [`AUTHENTICATION.md`](AUTHENTICATION.md) — kirjautumisvirrat, lupataso, do
 |------|-----------|
 | 15:00 | Cloud Scheduler käynnistää Cloud SQL:n (`activationPolicy=ALWAYS`) |
 | 15:00–15:03 | DB herää, Froide vastaa normaalisti |
-| 16:00 | `check_and_shutdown_db` tarkistaa sessiot |
-| 16:00 (ei käyttäjiä) | Cloud SQL sammutetaan (`activationPolicy=NEVER`) |
+| Joka tunti :45 | `check_and_shutdown_db` tarkistaa sessiot |
+| :45 (ei käyttäjiä) | Cloud SQL sammutetaan (`activationPolicy=NEVER`) |
 | Milloin tahansa | Käyttäjä kirjautuu → DBWakeupMiddleware herättää DB:n |
 
 ---
@@ -205,7 +207,8 @@ gcloud scheduler jobs create http froide-db-start \
   --oauth-service-account-email=${SA_EMAIL} \
   --location=europe-north1
 
-# Sammuta klo 16:00 EET (UTC 13:00) — Cloud Run Job
+# Tarkista sessiot ja sammuta tarvittaessa joka tunnin :45 (UTC :45)
+# cron "45 * * * *" = joka tunnin 45. minuutti
 gcloud run jobs create froide-shutdown-check \
   --image=${IMAGE} \
   --command=python \
@@ -213,7 +216,7 @@ gcloud run jobs create froide-shutdown-check \
   --region=europe-north1
 
 gcloud scheduler jobs create http froide-db-shutdown-check \
-  --schedule="0 13 * * *" \
+  --schedule="45 * * * *" \
   --uri="https://run.googleapis.com/v2/projects/${PROJECT_ID}/locations/europe-north1/jobs/froide-shutdown-check:run" \
   --http-method=POST \
   --oauth-service-account-email=${SA_EMAIL} \
