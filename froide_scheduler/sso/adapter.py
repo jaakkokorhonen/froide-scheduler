@@ -1,11 +1,13 @@
-"""Mukautettu allauth-adapteri domain-rajoitukselle.
+"""Mukautettu allauth-adapteri Google SSO:lle.
 
-Rajoittaa Google SSO:n tiettyyn sähköpostdomainiin kun
-GOOGLE_SSO_DOMAIN-ympäristömuuttuja on asetettu.
+Oletuksena kirjautuminen on auki kaikille Google-tileille.
+SSO-käyttäjä saa täsmälleen saman lupatason kuin tavallisella
+lomakkeella rekisteröitynyt kansalainen — ei lisäoikeuksia.
 
-Lisää settings_gcp.py:hin:
+Domain-rajoitus aktivoituu asettamalla ympäristömuuttuja:
+    GOOGLE_SSO_DOMAIN=yourdomain.fi
 
-    SOCIALACCOUNT_ADAPTER = "froide_scheduler.sso.adapter.DomainRestrictedSocialAccountAdapter"
+Ks. AUTHENTICATION.md tarkempi selitys.
 """
 import os
 
@@ -14,21 +16,23 @@ from django.core.exceptions import PermissionDenied
 
 
 class DomainRestrictedSocialAccountAdapter(DefaultSocialAccountAdapter):
-    """Sallii kirjautumisen vain GOOGLE_SSO_DOMAIN-muuttujan domainista.
+    """Google SSO -adapteri Froide-portaalille.
 
-    Jos muuttujaa ei ole asetettu, kaikki Google-tilit sallitaan
-    (kehitysympäristö / tarkoituksellinen julkinen käyttö).
+    Toiminta:
+    - Ilman GOOGLE_SSO_DOMAIN: kaikki Google-tilit sallittu (kansalaiskäyttö)
+    - GOOGLE_SSO_DOMAIN asetettu: vain kyseisen domainin tilit sallittu
+
+    save_user()-ylikirjoitusta ei tarvita: alloauthin oletustoteutus
+    luo käyttäjän is_active=True, is_staff=False, is_superuser=False —
+    täsmälleen oikea lupataso kansalaiskäyttäjälle.
     """
 
     def pre_social_login(self, request, sociallogin):
         allowed_domain = os.environ.get("GOOGLE_SSO_DOMAIN", "")
-        if not allowed_domain:
-            return  # Ei rajoitusta
-
-        email = sociallogin.account.extra_data.get("email", "")
-        if not email.endswith(f"@{allowed_domain}"):
-            raise PermissionDenied(
-                f"Kirjautuminen sallittu vain @{allowed_domain} -osoitteille."
-            )
-
+        if allowed_domain:
+            email = sociallogin.account.extra_data.get("email", "")
+            if not email.endswith(f"@{allowed_domain}"):
+                raise PermissionDenied(
+                    f"Kirjautuminen sallittu vain @{allowed_domain} -osoitteille."
+                )
         super().pre_social_login(request, sociallogin)
