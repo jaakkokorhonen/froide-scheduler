@@ -1,4 +1,4 @@
-"""Google SSO -konfiguraatio Froide-asennukselle.
+"""Google- ja GitHub SSO -konfiguraatio Froide-asennukselle.
 
 Lisää settings_gcp.py:hin:
 
@@ -16,6 +16,7 @@ INSTALLED_APPS = list(INSTALLED_APPS) + [  # noqa: F821
     "allauth.account",
     "allauth.socialaccount",
     "allauth.socialaccount.providers.google",
+    "allauth.socialaccount.providers.github",
 ]
 
 # ---------------------------------------------------------------------------
@@ -31,7 +32,7 @@ AUTHENTICATION_BACKENDS = list(AUTHENTICATION_BACKENDS) + [  # noqa: F821
 ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_USERNAME_REQUIRED = False
 ACCOUNT_AUTHENTICATION_METHOD = "email"
-ACCOUNT_EMAIL_VERIFICATION = "none"  # Google vahvistaa sähköpostin jo
+ACCOUNT_EMAIL_VERIFICATION = "none"  # Google/GitHub vahvistaa sähköpostin jo
 ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https"
 
 # Kirjautumisen jälkeen ohjataan Froiden etusivulle
@@ -52,7 +53,11 @@ SOCIALACCOUNT_PROVIDERS = {
         "ALLOWED_DOMAINS": [
             d for d in [os.environ.get("GOOGLE_SSO_DOMAIN", "")] if d
         ],
-    }
+    },
+    "github": {
+        "SCOPE": ["user:email"],
+        # GitHub ei tue PKCE OAuth-flowssa, jätetään pois
+    },
 }
 
 # Vaaditaan sähköposti jokaiselta social-tililtä

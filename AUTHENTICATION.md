@@ -2,51 +2,56 @@
 
 ## Malli
 
-Froide-portaaliin voi kirjautua Google SSO:lla (OAuth2 + PKCE).
-Kirjautuminen on auki **kaikille Gmail-tileille** — käyttäjä on aina
-tavallinen kansalainen, ei organisaation sisäinen käyttäjä.
+Froide-portaaliin voi kirjautua kahdella SSO-providerilla:
 
-SSO ei anna lisäoikeuksia. Se korvaa lomakerekisteröitymisen ja
-sähköpostivahvistuksen, mutta käyttäjän oletuslupataso on
-täsmälleen sama kuin itse rekisteröityneellä kansalaisella.
+| Provider | Käyttäjätyyppi | Rajoitus |
+|---|---|---|
+| **Google** | Kansalainen | Ei rajoitusta (kaikki Gmail-tilit) |
+| **GitHub** | Kansalainen | Ei rajoitusta (kaikki GitHub-tilit) |
+
+Kumpikaan provider ei anna lisäoikeuksia. Molemmat korvaavat
+lomakerekisteröitymisen ja sähköpostivahvistuksen, mutta
+käyttäjän oletuslupataso on täsmälleen sama kuin itse
+rekisteröityneellä kansalaisella.
 
 ## Käyttäjän oletuslupataso (SSO-kirjautuminen)
 
 | Kenttä | Arvo | Selitys |
 |---|---|---|
-| `is_active` | `True` | Google on vahvistanut tilin |
-| `is_staff` | `False` | Django admin: myonnetään erikseen |
+| `is_active` | `True` | Provider on vahvistanut tilin |
+| `is_staff` | `False` | Django admin: myönnetään erikseen |
 | `is_superuser` | `False` | Ei koskaan automaattisesti |
 | `UserProfile.is_trusted` | `False` | Tuntematon käyttäjä — sama kuin uusi rekisteröityjä |
-| `UserProfile.is_journalist` | `False` | Myonnetään erikseen |
+| `UserProfile.is_journalist` | `False` | Myönnetään erikseen |
 | `UserProfile.private` | `False` | Froiden oletusarvo |
 
 ## Ero tavalliseen lomakerekisteröitymiseen
 
 Ainoa merkityksellinen ero on **sähköpostivahvistus**: normaalissa
 rekisteröitymisessä käyttäjä klikkaa vahvistuslinkin. SSO:ssa
-Google on jo vahvistanut sähköpostin, joten vahvistusvaihetta ei
-tarvita (`ACCOUNT_EMAIL_VERIFICATION = "none"`).
+provider on jo vahvistanut sähköpostin, joten vahvistusvaihetta
+ei tarvita (`ACCOUNT_EMAIL_VERIFICATION = "none"`).
 
 Muuten oikeudet, rajoitukset ja käyttäjäkokemus ovat identtiset.
 
-## Domain-rajoitus
+## Domain-rajoitus (valinnainen)
 
-Oletuksena käyttö on auki kaikille Google-tileille.
-Jos portaali halutaan rajoittaa tietyn organisaation jäsenille,
-aseta ympäristömuuttuja:
+Google-kirjautuminen voidaan rajoittaa tiettyyn Google Workspace
+-domainiin asettamalla ympäristömuuttuja:
 
 ```
 GOOGLE_SSO_DOMAIN=yourdomain.fi
 ```
 
-Tällöin `DomainRestrictedSocialAccountAdapter` hylkää kirjautumisyritykset
-joiden sähköposti ei pääty `@yourdomain.fi`-domainiin.
+Tällöin `DomainRestrictedSocialAccountAdapter` hylkää muut tilit.
+GitHub-kirjautumisessa vastaavaa rajoitusta ei ole —
+lisAtään tarvittaessa org/tiimi-tarkistuksella.
 
 ## Admin-oikeuksien myöntäminen
 
 `is_staff` ja `is_superuser` myönnetään aina manuaalisesti
-Django adminissa tai management commandilla:
+Django adminissa tai management commandilla — riippumatta
+käytetään SSO-providerista:
 
 ```bash
 python manage.py shell -c "
@@ -58,29 +63,49 @@ u.save()
 "
 ```
 
-## Kirjautumisvirta
+## Kirjautumisvirrat
 
 ```
+Google:
 Käyttäjä → /accounts/google/login/
     → Google OAuth2 (PKCE)
-    → Google palauttaa: email, name, picture
     → DomainRestrictedSocialAccountAdapter.pre_social_login()
         → GOOGLE_SSO_DOMAIN asetettu? Tarkista domain. Muuten: läpimeno.
     → allauth: onko tämä email jo rekisteröity?
-        Kyllä → yhdistä olemassa olevaan Django-käyttäjään
+        Kyllä → yhdistä olemassa olevaan käyttäjään
+        Ei   → luo uusi käyttäjä oletusluvin
+    → Kirjautuminen onnistui → ohjaus /
+
+GitHub:
+Käyttäjä → /accounts/github/login/
+    → GitHub OAuth2 (scope: user:email)
+    → DomainRestrictedSocialAccountAdapter.pre_social_login()
+        → GitHub-providerille ei rajoitusta — läpimeno
+    → allauth: onko tämä email jo rekisteröity?
+        Kyllä → yhdistä olemassa olevaan käyttäjään
         Ei   → luo uusi käyttäjä oletusluvin
     → Kirjautuminen onnistui → ohjaus /
 ```
+
+## Ympäristömuuttujat
+
+| Muuttuja | Pakollinen | Selitys |
+|---|---|---|
+| `GOOGLE_OAUTH_CLIENT_ID` | Kyllä | Google OAuth2 Client ID |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Kyllä | Google OAuth2 Client Secret |
+| `GITHUB_OAUTH_CLIENT_ID` | Kyllä | GitHub OAuth App Client ID |
+| `GITHUB_OAUTH_CLIENT_SECRET` | Kyllä | GitHub OAuth App Client Secret |
+| `GOOGLE_SSO_DOMAIN` | Ei | Google-kirjautumisen domain-rajoitus |
 
 ## Relevantit asetukset
 
 ```python
 # froide_scheduler/sso/settings.py
-ACCOUNT_EMAIL_VERIFICATION = "none"       # Google vahvistaa jo
+ACCOUNT_EMAIL_VERIFICATION = "none"       # Provider vahvistaa jo
 ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_USERNAME_REQUIRED = False
 ACCOUNT_AUTHENTICATION_METHOD = "email"
 SOCIALACCOUNT_EMAIL_REQUIRED = True
 SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
-SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True  # Yhdistä duplikaatit
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True  # Yhdistää duplikaatit
 ```
