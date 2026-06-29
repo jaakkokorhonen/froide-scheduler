@@ -45,13 +45,13 @@ GOOGLE_SSO_DOMAIN=yourdomain.fi
 
 Tällöin `DomainRestrictedSocialAccountAdapter` hylkää muut tilit.
 GitHub-kirjautumisessa vastaavaa rajoitusta ei ole —
-lisAtään tarvittaessa org/tiimi-tarkistuksella.
+lisätään tarvittaessa org/tiimi-tarkistuksella.
 
 ## Admin-oikeuksien myöntäminen
 
 `is_staff` ja `is_superuser` myönnetään aina manuaalisesti
 Django adminissa tai management commandilla — riippumatta
-käytetään SSO-providerista:
+käytetystä SSO-providerista:
 
 ```bash
 python manage.py shell -c "
@@ -91,9 +91,9 @@ Käyttäjä → /accounts/github/login/
 
 | Muuttuja | Pakollinen | Selitys |
 |---|---|---|
-| `GOOGLE_OAUTH_CLIENT_ID` | Kyllä | Google OAuth2 Client ID |
+| `GOOGLE_OAUTH_CLIENT_ID` | Kyllä | Google OAuth2 Client ID. [Ohje](https://developers.google.com/identity/protocols/oauth2) |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | Kyllä | Google OAuth2 Client Secret |
-| `GITHUB_OAUTH_CLIENT_ID` | Kyllä | GitHub OAuth App Client ID |
+| `GITHUB_OAUTH_CLIENT_ID` | Kyllä | GitHub OAuth App Client ID. [Ohje](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app) |
 | `GITHUB_OAUTH_CLIENT_SECRET` | Kyllä | GitHub OAuth App Client Secret |
 | `GOOGLE_SSO_DOMAIN` | Ei | Google-kirjautumisen domain-rajoitus |
 
@@ -101,7 +101,7 @@ Käyttäjä → /accounts/github/login/
 
 ```python
 # froide_scheduler/sso/settings.py
-ACCOUNT_EMAIL_VERIFICATION = "none"       # Provider vahvistaa jo
+ACCOUNT_EMAIL_VERIFICATION = "none"                    # Provider vahvistaa jo
 ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_USERNAME_REQUIRED = False
 ACCOUNT_AUTHENTICATION_METHOD = "email"
@@ -109,3 +109,5 @@ SOCIALACCOUNT_EMAIL_REQUIRED = True
 SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
 SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True  # Yhdistää duplikaatit
 ```
+
+Ks. [django-allauth SocialAccount -dokumentaatio](https://docs.allauth.org/en/latest/socialaccount/configuration.html).

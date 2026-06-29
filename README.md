@@ -1,20 +1,10 @@
 # froide-scheduler
 
-Cloud SQL:n automaattinen sammutus ja herätys Froide-asennuksille (Google Cloud Platform).
+Cloud SQL:n automaattinen sammutus/herätys ja Google/GitHub SSO Froide-asennuksille (Google Cloud Platform).
 
 Ajetaan Froide-asennuksen päälle patchina — ei muokkaa Froide-ydintä.
 
 ## Miksi
-Cloud SQL:n automaattinen sammutus/herätys ja Google SSO Froide-asennuksille (Google Cloud Platform).
-
-Ajetaan Froide-asennuksen päälle patchina — ei muokkaa Froide-ydintä.
-
-## Ominaisuudet
-
-- **DBWakeupMiddleware** — herättää Cloud SQL:n automaattisesti kun kirjautunut käyttäjä tai kirjautumissivu havaitaan
-- **`check_and_shutdown_db`** — sammuttaa Cloud SQL:n jos ei aktiivisia sessioita
-- **`/__health/`** — sisäinen endpoint jonka selain pollaa odotussivulla kunnes DB on valmis
-- **Google SSO** — django-allauth-pohjainen OAuth2-kirjautuminen, domain-rajoituksella
 
 Cloud SQL `db-f1-micro` maksaa ~$12/kk pyöriessään jatkuvasti. Suurin osa tästä ajasta kanta on tyhjäkäynnillä. Tämä paketti sammuttaa kannan automaattisesti inaktiivin aikana ja herättää sen tarvittaessa.
 
@@ -22,45 +12,40 @@ Cloud SQL `db-f1-micro` maksaa ~$12/kk pyöriessään jatkuvasti. Suurin osa tä
 
 ## Hyväksytty haitta
 
-Ensimmäinen käyttäjä inaktiivijakson jälkeen odottaa kannan käynnistymistä **1–3 minuuttia**. Käyttäjälle näytetään odotussivu automaattisesti. Tämä on tietoinen kompromissi, dokumentoitu [`DECISIONS.md`](DECISIONS.md):ssä.
-Cloud SQL `db-f1-micro`: ~$12/kk → ~$2/kk kun sammutettuna inaktiivina. **Säästö ~$10/kk.**
+Ensimmäinen käyttäjä inaktiivijakson jälkeen odottaa kannan käynnistymistä **1–3 minuuttia**. Käyttäjälle näytetään odotussivu automaattisesti. Tämä on tietoinen kompromissi — katso [`DECISIONS.md`](DECISIONS.md).
 
-## Hyväksytty haitta
+## Ominaisuudet
 
-Ensimmäinen käyttäjä inaktiivijakson jälkeen odottaa **1–3 minuuttia** kannan käynnistymistä. Käyttäjälle näytetään odotussivu automaattisesti. Dokumentoitu [`DECISIONS.md`](DECISIONS.md):ssä.
+- **DBWakeupMiddleware** — herättää Cloud SQL:n automaattisesti kun kirjautunut käyttäjä tai kirjautumissivu havaitaan
+- **`check_and_shutdown_db`** — sammuttaa Cloud SQL:n jos ei aktiivisia sessioita
+- **`/__health/`** — sisäinen endpoint jonka selain pollaa odotussivulla kunnes DB on valmis
+- **Google SSO** — kaikille Gmail-tileille, domain-rajoitus valinnaisella `GOOGLE_SSO_DOMAIN`-muuttujalla
+- **GitHub SSO** — kaikille GitHub-tileille, admin-oikeudet myönnetään erikseen
 
 ## Repon rakenne
 
 ```
 froide-scheduler/
 ├── froide_scheduler/
-│   ├── __init__.py
 │   ├── signals.py                        # user_logged_in/out → db_needed-cookie
 │   ├── urls.py                           # /__health/ -reitti
 │   ├── middleware/
 │   │   └── db_wakeup.py                  # Päälogiikka: havaitsee tarpeen, herättää DB:n
 │   ├── views/
 │   │   └── health.py                     # /__health/ — selain pollaa tätä odotussivulta
-│   └── management/
-│       └── commands/
-│           └── check_and_shutdown_db.py  # Sammuttaa jos ei sessioita
-│   ├── signals.py                             # user_logged_in/out → db_needed-cookie
-│   ├── urls.py                                # /__health/ -reitti
-│   ├── middleware/
-│   │   └── db_wakeup.py                       # Päälogiikka: havaitsee tarpeen, herättää DB:n
-│   ├── views/
-│   │   └── health.py                          # /__health/ — selain pollaa tätä odotussivulta
 │   ├── management/
 │   │   └── commands/
-│   │       └── check_and_shutdown_db.py       # Sammuttaa jos ei sessioita
+│   │       └── check_and_shutdown_db.py  # Sammuttaa jos ei sessioita
 │   └── sso/
-│       ├── settings.py                        # INSTALLED_APPS, SOCIALACCOUNT_PROVIDERS jne.
-│       ├── urls.py                            # allauth.urls -sisällytys
-│       ├── adapter.py                         # Domain-rajoitus (GOOGLE_SSO_DOMAIN)
+│       ├── settings.py                   # INSTALLED_APPS, SOCIALACCOUNT_PROVIDERS jne.
+│       ├── urls.py                       # allauth.urls -sisällytys
+│       ├── adapter.py                    # Domain-rajoitus (GOOGLE_SSO_DOMAIN)
 │       └── migrations/
-│           └── 0001_google_socialapp.py       # Datamigration: luo SocialApp env-muuttujista
-├── setup.py
+│           ├── 0001_google_socialapp.py  # Luo Google SocialApp env-muuttujista
+│           └── 0002_github_socialapp.py  # Luo GitHub SocialApp env-muuttujista
+├── AUTHENTICATION.md
 ├── DECISIONS.md
+├── setup.py
 └── README.md
 ```
 
@@ -76,33 +61,22 @@ Käyttäjä → Django (Cloud Run)
          Kyllä → onko DB käynnissä?
               ↓ Ei
          → Kutsu Cloud SQL Admin API: activationPolicy=ALWAYS
-         → Cloud SQL Admin API: activationPolicy=ALWAYS
          → Palauta 503 + odotussivu (pollaa /__health/ 5s välein)
               ↓ DB herää (1–3 min)
          → Selain ohjataan takaisin alkuperäiseen osoitteeseen
 ```
 
-Kannan sammutus:
-```
-Cloud Scheduler klo 16:00
 ### Cloud SQL -sammutus
 
 ```
-Cloud Scheduler klo 16:00 EET
+Cloud Scheduler (päivittäin klo 16:00 EET)
     → python manage.py check_and_shutdown_db
     → Aktiivisia sessioita? Ei → activationPolicy=NEVER
 ```
 
-### Google SSO
+### Google/GitHub SSO
 
-```
-Käyttäjä → /accounts/google/login/
-    → Google OAuth2 (PKCE)
-    → Paluu /accounts/google/login/callback/
-    → DomainRestrictedSocialAccountAdapter tarkistaa @domain.fi
-    → allauth luo tai yhdistää Django-käyttäjään
-    → Ohjaus LOGIN_REDIRECT_URL:iin (/)
-```
+Ks. [`AUTHENTICATION.md`](AUTHENTICATION.md) — kirjautumisvirrat, lupataso, domain-rajoitus ja admin-oikeuksien myöntäminen.
 
 ## Aikajana (EET)
 
@@ -124,10 +98,6 @@ Käyttäjä → /accounts/google/login/
 pip install git+https://github.com/jaakkokorhonen/froide-scheduler.git
 ```
 
-### 2. Lisää `settings_gcp.py`
-
-```python
-GCP_PROJECT_ID = env('GCP_PROJECT_ID')           # esim. 'froide-prod'
 ### 2. Cloud SQL -herätys: `settings_gcp.py`
 
 ```python
@@ -141,20 +111,18 @@ MIDDLEWARE = [
 ]
 ```
 
-### 3. Lisää `urls.py`
 ### 3. Cloud SQL -herätys: `urls.py`
 
 ```python
 from froide_scheduler.urls import urlpatterns as scheduler_urls
 
 urlpatterns = [
-    *scheduler_urls,
+    *scheduler_urls,  # /__health/
     # ...muut
 ]
 ```
 
-### 4. Rekisteröi signaalit `AppConfig.ready()`-metodissa
-### 4. Cloud SQL -herätys: signaalit
+### 4. Rekisteröi signaalit
 
 ```python
 # myapp/apps.py
@@ -163,29 +131,17 @@ class MyAppConfig(AppConfig):
         from froide_scheduler import signals  # noqa: F401
 ```
 
-### 5. Ympäristömuuttujat
-
-```
-GCP_PROJECT_ID=froide-prod
-CLOUD_SQL_INSTANCE=froide-db
-```
-
-Cloud Run -palvelutilillä täytyy olla `cloudsql.instances.update` -oikeus (rooli: `Cloud SQL Editor`).
-
-### 6. Cloud Scheduler -ajastimet
-
-```bash
-### 5. Google SSO: `settings_gcp.py`
+### 5. Google/GitHub SSO: `settings_gcp.py`
 
 ```python
 from froide_scheduler.sso.settings import *  # noqa
 
-# Valinnainen: rajoita kirjautuminen yhteen domainiin
+# Valinnainen: rajoita Google-kirjautuminen yhteen domainiin
 # (vaihtoehtoisesti aseta ympäristömuuttujalla GOOGLE_SSO_DOMAIN)
 SOCIALACCOUNT_ADAPTER = "froide_scheduler.sso.adapter.DomainRestrictedSocialAccountAdapter"
 ```
 
-### 6. Google SSO: `urls.py`
+### 6. Google/GitHub SSO: `urls.py`
 
 ```python
 from froide_scheduler.sso.urls import urlpatterns as sso_urlpatterns
@@ -201,8 +157,8 @@ urlpatterns = [
 
 ```bash
 python manage.py migrate
-# Luo Google SocialApp automaattisesti jos GOOGLE_OAUTH_CLIENT_ID ja
-# GOOGLE_OAUTH_CLIENT_SECRET on asetettu ympäristömuuttujiin.
+# Luo Google ja GitHub SocialApp-objektit automaattisesti
+# jos OAuth-ympäristömuuttujat on asetettu.
 ```
 
 ### 8. Ympäristömuuttujat
@@ -212,11 +168,17 @@ python manage.py migrate
 GCP_PROJECT_ID=froide-prod
 CLOUD_SQL_INSTANCE=froide-db
 
-# Google SSO — hae GCP Console → APIs & Services → Credentials
+# Google SSO — hae: GCP Console → APIs & Services → Credentials
+# Ohje: https://developers.google.com/identity/protocols/oauth2
 GOOGLE_OAUTH_CLIENT_ID=123456789-xxx.apps.googleusercontent.com
 GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-xxx
 
-# Valinnainen: rajoita kirjautuminen yhteen domainiin
+# GitHub SSO — hae: github.com → Settings → Developer settings → OAuth Apps
+# Ohje: https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app
+GITHUB_OAUTH_CLIENT_ID=Iv1.xxx
+GITHUB_OAUTH_CLIENT_SECRET=xxx
+
+# Valinnainen: rajoita Google-kirjautuminen yhteen domainiin
 GOOGLE_SSO_DOMAIN=yourdomain.fi
 ```
 
@@ -225,7 +187,9 @@ GOOGLE_SSO_DOMAIN=yourdomain.fi
 ```bash
 gcloud run services update froide \
   --set-secrets=GOOGLE_OAUTH_CLIENT_ID=google-oauth-client-id:latest,\
-GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret:latest \
+GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret:latest,\
+GITHUB_OAUTH_CLIENT_ID=github-oauth-client-id:latest,\
+GITHUB_OAUTH_CLIENT_SECRET=github-oauth-client-secret:latest \
   --region=europe-north1
 ```
 
@@ -241,22 +205,6 @@ gcloud scheduler jobs create http froide-db-start \
   --oauth-service-account-email=${SA_EMAIL} \
   --location=europe-north1
 
-# Tarkista sessiot ja sammuta tarvittaessa klo 16:00 EET (UTC 13:00)
-# Aja Cloud Run Job -muodossa:
-gcloud scheduler jobs create http froide-db-shutdown-check \
-  --schedule="0 13 * * *" \
-  --uri="https://${CLOUD_RUN_JOB_URL}" \
-  --location=europe-north1
-```
-
-Tai aja `check_and_shutdown_db` suoraan Cloud Run Jobina:
-
-```bash
-gcloud run jobs create froide-shutdown-check \
-  --image=${IMAGE} \
-  --command="python" \
-  --args="manage.py,check_and_shutdown_db" \
-  --region=europe-north1
 # Sammuta klo 16:00 EET (UTC 13:00) — Cloud Run Job
 gcloud run jobs create froide-shutdown-check \
   --image=${IMAGE} \
@@ -287,12 +235,23 @@ gcloud projects add-iam-policy-binding ${PROJECT_ID} \
   --role=roles/cloudsql.editor
 ```
 
+Ks. [Cloud SQL IAM -dokumentaatio](https://cloud.google.com/sql/docs/mysql/iam-roles) ja [Cloud Run IAM](https://cloud.google.com/run/docs/securing/managing-access).
+
 ## Riippuvuudet
 
-- Django >= 4.2
-- google-auth >= 2.0
-- google-api-python-client >= 2.0
-- django-allauth >= 0.63
+| Paketti | Versio | Käyttö |
+|---|---|---|
+| Django | >= 4.2 | Perusta |
+| google-auth | >= 2.0 | Cloud SQL Admin API -autentikointi |
+| google-api-python-client | >= 2.0 | Cloud SQL Admin API -kutsut |
+| django-allauth | >= 0.63 | Google ja GitHub SSO |
+
+Ks. [django-allauth -dokumentaatio](https://docs.allauth.org/) ja [google-api-python-client](https://googleapis.github.io/google-api-python-client/docs/).
+
+## Lisätietoja
+
+- [`AUTHENTICATION.md`](AUTHENTICATION.md) — SSO-malli, lupataso, kirjautumisvirrat
+- [`DECISIONS.md`](DECISIONS.md) — arkkitehtuuripäätökset perusteluineen
 
 ## Lisenssi
 
