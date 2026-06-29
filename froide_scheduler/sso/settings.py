@@ -40,6 +40,16 @@ LOGIN_REDIRECT_URL = "/"
 ACCOUNT_LOGOUT_REDIRECT_URL = "/"
 
 # ---------------------------------------------------------------------------
+# Sessio: 3 tuntia, nollautuu aktiivisesta käytöstä
+#
+# SESSION_COOKIE_AGE: sessio vanhenee 3h viimeisestä aktiviteetista
+# SESSION_SAVE_EVERY_REQUEST: pidentää kellon joka pyynnyllä, joten
+#   aktiivisesti käyttävä ei joudu kirjautumaan uudelleen
+# ---------------------------------------------------------------------------
+SESSION_COOKIE_AGE = 10800  # 3 * 60 * 60 = 10 800 sekuntia
+SESSION_SAVE_EVERY_REQUEST = True
+
+# ---------------------------------------------------------------------------
 # Google OAuth2 -provider
 # ---------------------------------------------------------------------------
 SOCIALACCOUNT_PROVIDERS = {
