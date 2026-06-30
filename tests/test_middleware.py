@@ -3,7 +3,7 @@
 Kaikki DB- ja GCP-kutsut mockataan — ei oikeaa yhteyttä tarvita.
 """
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from django.http import HttpResponse
 
 from froide_scheduler.middleware.db_wakeup import DBWakeupMiddleware
@@ -22,7 +22,8 @@ def reset_globals():
 
 def make_middleware(get_response=None):
     if get_response is None:
-        get_response = lambda req: HttpResponse('ok')  # noqa: E731
+        def get_response(req):  # noqa: E306
+            return HttpResponse('ok')
     return DBWakeupMiddleware(get_response)
 
 

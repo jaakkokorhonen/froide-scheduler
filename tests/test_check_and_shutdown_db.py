@@ -3,7 +3,7 @@
 API-kutsut ja Session-queryt mockataan — ei oikeaa DB:tä tai GCP:tä.
 """
 import pytest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 from io import StringIO
 
 from django.core.management import call_command
