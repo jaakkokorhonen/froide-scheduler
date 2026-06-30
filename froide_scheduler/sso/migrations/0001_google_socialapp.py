@@ -7,7 +7,7 @@ Edellyttää ympäristömuuttujat:
 GCP-suositus: tallenna Secret Manageriin ja injektoi Cloud Runiin
 näin (Cloud Run -palvelun deploy-komennossa):
 
-    --set-secrets=GOOGLE_OAUTH_CLIENT_ID=google-oauth-client-id:latest,\
+    --set-secrets=GOOGLE_OAUTH_CLIENT_ID=google-oauth-client-id:latest,\\
                   GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret:latest
 
 Migration on idempotentti: jos SocialApp on jo olemassa, sitä
@@ -42,12 +42,12 @@ def create_google_socialapp(apps, schema_editor):
         },
     )
 
-    # Liitä kaikki Sites-objektit (tavallisesti vain yksi)
-    for site in Site.objects.all():
-        app.sites.add(site)
+    # Liitä nykyinen Site (yhdenmukainen 0002_github_socialapp:n kanssa)
+    site = Site.objects.get_current()
+    app.sites.add(site)
 
     action = "Luotu" if created else "Päivitetty"
-    print(f"\n[froide-scheduler] {action} Google SocialApp (id={app.pk})")
+    print(f"\n[froide-scheduler] {action} Google SocialApp (id={app.pk}, site: {site.domain})")
 
 
 def delete_google_socialapp(apps, schema_editor):

@@ -12,7 +12,4 @@ setup(
         'google-api-python-client>=2.0',
         'django-allauth>=0.63',
     ],
-    extras_require={
-        'sso': ['django-allauth>=0.63'],
-    },
 )
