@@ -16,14 +16,21 @@ lisätä lataussivu jos odotusaika koetaan liian pitkäksi.
 - Käyttäjällä on voimassa oleva `db_needed=1` -cookie (asetettu kirjautuessa)
 
 **Sammutusehto:**
-- Cloud Scheduler ajaa `check_and_shutdown_db` klo 16:00 EET
+- Cloud Scheduler ajaa `check_and_shutdown_db` joka tunnin :45 (cron: `45 * * * *`)
 - Jos aktiivisia Django-sessioita ei ole → Cloud SQL sammutetaan
 
 **Aikajana (EET):**
 - 15:00 — Cloud Scheduler käynnistää Cloud SQL:n (`activationPolicy=ALWAYS`)
-- 16:00 — `check_and_shutdown_db` tarkistaa sessiot
-- 16:00 (jos ei käyttäjiä) — Cloud SQL sammutetaan (`activationPolicy=NEVER`)
+- Joka tunti :45 — `check_and_shutdown_db` tarkistaa sessiot
+- :45 (jos ei käyttäjiä) — Cloud SQL sammutetaan (`activationPolicy=NEVER`)
 - Milloin tahansa — Käyttäjä kirjautuu → `DBWakeupMiddleware` herättää DB:n
+
+**Huomio — multi-instanssi -käyttäytyminen:**
+`_db_ready`-muuttuja on in-memory per Cloud Run -instanssi. Jokainen uusi
+instanssi tekee ensimmäisellä pyynnöllä yhden DB-yhteyskokeilun (`_check_db_alive`)
+asettaakseen oman tilansa. Tämä on normaali ja hyväksytty käyttäytyminen —
+ylimääräinen kokeilukytkentä on nopea eikä aiheuta herätystä jos DB on
+jo käynnissä.
 
 **Toteutus:** [`froide_scheduler/middleware/db_wakeup.py`](froide_scheduler/middleware/db_wakeup.py)
 
