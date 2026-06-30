@@ -93,6 +93,21 @@ Ks. [`AUTHENTICATION.md`](AUTHENTICATION.md) — kirjautumisvirrat, lupataso, do
 
 ---
 
+## Lokaalikehitys
+
+`froide_scheduler.sso.settings` asettaa `ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https"`,
+koska Cloud Run -tuotantoympäristö on aina HTTPS. Django `runserver` käyttää `http://`,
+minkä vuoksi allauthin redirect-URL:t katkeavat lokaalisti.
+
+Ylikirjoita asetus omassa lokaaliasetustiedostossa:
+
+```python
+# settings_local.py
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = "http"
+```
+
+---
+
 ## Asennus
 
 ### 1. Asenna paketti
