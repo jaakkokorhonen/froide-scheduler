@@ -25,6 +25,19 @@ lisätä lataussivu jos odotusaika koetaan liian pitkäksi.
 - :45 (jos ei käyttäjiä) — Cloud SQL sammutetaan (`activationPolicy=NEVER`)
 - Milloin tahansa — Käyttäjä kirjautuu → `DBWakeupMiddleware` herättää DB:n
 
+**Odotussivun polling-käyttäytyminen:**
+Selain odottaa ensin 10 sekuntia ennen ensimmäistä `/__health/`-kyselyä
+(DB:n käynnistyminen vie aina vähintään useita sekunteja), sen jälkeen
+pollataan 5 sekunnin välein kunnes DB vastaa 200.
+
+**Huomio — cookie-aikataulutus:**
+`db_needed`-cookie elää 8 tuntia (`WAKEUP_COOKIE_MAX_AGE = 8h`), mutta
+Django-sessio vanhenee 3 tunnin inaktiivin jälkeen (`SESSION_COOKIE_AGE = 3h`).
+Tämä tarkoittaa, että DB voidaan herättää cookien perusteella vaikka
+käyttäjän sessio olisi jo vanhentunut. Tämä on hyväksytty käyttäytyminen:
+herätys on nopea eikä aiheuta haittaa, ja `check_and_shutdown_db` sammuttaa
+DB:n heti kun aktiivisia sessioita ei ole.
+
 **Huomio — multi-instanssi -käyttäytyminen:**
 `_db_ready`-muuttuja on in-memory per Cloud Run -instanssi. Jokainen uusi
 instanssi tekee ensimmäisellä pyynnöllä yhden DB-yhteyskokeilun (`_check_db_alive`)

@@ -62,7 +62,7 @@ Käyttäjä → Django (Cloud Run)
          Kyllä → onko DB käynnissä?
               ↓ Ei
          → Kutsu Cloud SQL Admin API: activationPolicy=ALWAYS
-         → Palauta 503 + odotussivu (pollaa /__health/ 5s välein)
+         → Palauta 503 + odotussivu (10s alkuviive, sitten pollaa /__health/ 5s välein)
               ↓ DB herää (1–3 min)
          → Selain ohjataan takaisin alkuperäiseen osoitteeseen
 ```
@@ -261,6 +261,20 @@ gcloud projects add-iam-policy-binding ${PROJECT_ID} \
 
 Ks. [Cloud SQL IAM -dokumentaatio](https://cloud.google.com/sql/docs/mysql/iam-roles) ja [Cloud Run IAM](https://cloud.google.com/run/docs/securing/managing-access).
 
+### 11. Nginx / reverse proxy — health-endpoint
+
+`/__health/` pollataan odotussivulta tiheästi. Jos käytät nginx:iä tai muuta reverse
+proxya, estä access-logien täyttyminen:
+
+```nginx
+location = /__health/ {
+    access_log off;
+    proxy_pass http://django_upstream;
+}
+```
+
+Cloud Run -ympäristössä nginx ei yleensä ole välissä, joten tämä vaihe voidaan ohittaa.
+
 ## Riippuvuudet
 
 | Paketti | Versio | Käyttö |
@@ -270,6 +284,7 @@ Ks. [Cloud SQL IAM -dokumentaatio](https://cloud.google.com/sql/docs/mysql/iam-r
 | google-api-python-client | >= 2.0 | Cloud SQL Admin API -kutsut (v1beta4) |
 | django-allauth | >= 0.63 | Google ja GitHub SSO |
 | django.contrib.sessions | Django sisäinen | Sessiotarkistus (`check_and_shutdown_db`) |
+| django.contrib.sites | Django sisäinen | Vaaditaan migraatioissa (SocialApp ↔ Site) |
 
 Ks. [django-allauth -dokumentaatio](https://docs.allauth.org/) ja [google-api-python-client](https://googleapis.github.io/google-api-python-client/docs/).
 
