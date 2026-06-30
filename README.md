@@ -37,6 +37,7 @@ froide-scheduler/
 │   │   └── commands/
 │   │       └── check_and_shutdown_db.py  # Sammuttaa jos ei sessioita
 │   └── sso/
+│       ├── apps.py                       # AppConfig — app_label='froide_scheduler_sso'
 │       ├── settings.py                   # INSTALLED_APPS, SOCIALACCOUNT_PROVIDERS jne.
 │       ├── urls.py                       # allauth.urls -sisällytys
 │       ├── adapter.py                    # Domain-rajoitus (GOOGLE_SSO_DOMAIN)
@@ -83,7 +84,7 @@ Ks. [`AUTHENTICATION.md`](AUTHENTICATION.md) — kirjautumisvirrat, lupataso, do
 ## Aikajana (EET)
 
 | Aika | Tapahtuma |
-|------|-----------|
+|------|----------|
 | 15:00 | Cloud Scheduler käynnistää Cloud SQL:n (`activationPolicy=ALWAYS`) |
 | 15:00–15:03 | DB herää, Froide vastaa normaalisti |
 | Joka tunti :45 | `check_and_shutdown_db` tarkistaa sessiot |
@@ -155,13 +156,33 @@ urlpatterns = [
 ]
 ```
 
-### 7. Aja migraatiot
+### 7. Lisää `INSTALLED_APPS`-listaan ja aja migraatiot
+
+`froide_scheduler.sso.settings` lisää `allauth`-sovellukset automaattisesti, mutta
+`froide_scheduler.sso` itsessään täytyy olla listassa jotta Django löytää migraatiot:
+
+```python
+# settings_gcp.py
+INSTALLED_APPS = [
+    # ...Froiden olemassa olevat sovellukset...
+    'froide_scheduler.sso',  # tarvitaan migraatioita varten
+]
+
+# tai ennen froide_scheduler.sso.settings -importtia:
+from froide_scheduler.sso.settings import *  # noqa
+```
+
+Sitten aja migraatiot:
 
 ```bash
 python manage.py migrate
 # Luo Google ja GitHub SocialApp-objektit automaattisesti
 # jos OAuth-ympäristömuuttujat on asetettu.
 ```
+
+> **Huomio:** `check_and_shutdown_db` käyttää `django.contrib.sessions`-mallia
+> (`SESSION_ENGINE='django.contrib.sessions.backends.db'`). Froide-asennus sisältää
+> tämän oletuksena, mutta varmista että `django.contrib.sessions` on `INSTALLED_APPS`:issa.
 
 ### 8. Ympäristömuuttujat
 
@@ -201,7 +222,7 @@ GITHUB_OAUTH_CLIENT_SECRET=github-oauth-client-secret:latest \
 # Käynnistä DB klo 15:00 EET (UTC 12:00)
 gcloud scheduler jobs create http froide-db-start \
   --schedule="0 12 * * *" \
-  --uri="https://sqladmin.googleapis.com/v1/projects/${PROJECT_ID}/instances/${INSTANCE}" \
+  --uri="https://sqladmin.googleapis.com/sql/v1beta4/projects/${PROJECT_ID}/instances/${INSTANCE}" \
   --message-body='{"settings":{"activationPolicy":"ALWAYS"}}' \
   --http-method=PATCH \
   --oauth-service-account-email=${SA_EMAIL} \
@@ -246,8 +267,9 @@ Ks. [Cloud SQL IAM -dokumentaatio](https://cloud.google.com/sql/docs/mysql/iam-r
 |---|---|---|
 | Django | >= 4.2 | Perusta |
 | google-auth | >= 2.0 | Cloud SQL Admin API -autentikointi |
-| google-api-python-client | >= 2.0 | Cloud SQL Admin API -kutsut |
+| google-api-python-client | >= 2.0 | Cloud SQL Admin API -kutsut (v1beta4) |
 | django-allauth | >= 0.63 | Google ja GitHub SSO |
+| django.contrib.sessions | Django sisäinen | Sessiotarkistus (`check_and_shutdown_db`) |
 
 Ks. [django-allauth -dokumentaatio](https://docs.allauth.org/) ja [google-api-python-client](https://googleapis.github.io/google-api-python-client/docs/).
 
