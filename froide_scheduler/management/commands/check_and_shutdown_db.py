@@ -4,49 +4,56 @@ Django management command joka sammuttaa Cloud SQL:n
 jos ei ole aktiivisia sessioita.
 
 Ajastettu Cloud Schedulerilla:
-  - Käynnistys: klo 15:00 EET (UTC 12:00)  → activationPolicy=ALWAYS
-  - Tarkistus:  joka tunnin :45 (UTC :45)   → sammutus jos ei sessioita
+  - Käynnistys: klo 15:00 EET (UTC 12:00)  -> activationPolicy=ALWAYS
+  - Tarkistus:  joka tunnin :45 (UTC :45)   -> sammutus jos ei sessioita
                 cron: "45 * * * *"
+
+Muutoshistoria:
+  - OperationalError DB-kyselyssä käsitellään siististi (DB jo sammunut)
+  - Käytetään yhteistä cloud_sql.set_activation_policy-helperiä
+  - Sammutuksen jälkeen nollataan _mark_db_not_ready() jotta middleware-tila
+    on ajan tasalla saman containerin säikeissä
 
 Käyttö:
     python manage.py check_and_shutdown_db
 """
-import google.auth
-import googleapiclient.discovery
-
-from django.conf import settings
 from django.contrib.sessions.models import Session
 from django.core.management.base import BaseCommand
+from django.db import OperationalError
 from django.utils import timezone
+
+from froide_scheduler.cloud_sql import set_activation_policy
+from froide_scheduler.middleware.db_wakeup import _mark_db_not_ready
 
 
 class Command(BaseCommand):
-    help = 'Sammuttaa Cloud SQL jos ei aktiivisia sessioita'
+    help = "Sammuttaa Cloud SQL jos ei aktiivisia sessioita"
 
     def handle(self, *args, **kwargs):
-        active = Session.objects.filter(
-            expire_date__gt=timezone.now()
-        ).count()
-
-        self.stdout.write(f'Aktiivisia sessioita: {active}')
-
-        if active > 0:
-            self.stdout.write('Sessioita käynnissä — DB pysyy päällä.')
+        try:
+            active = Session.objects.filter(
+                expire_date__gt=timezone.now()
+            ).count()
+        except OperationalError:
+            self.stdout.write(
+                self.style.WARNING(
+                    "DB ei vastaa \u2014 oletetaan jo sammuneeksi, ohitetaan sammutus."
+                )
+            )
+            _mark_db_not_ready()
             return
 
-        self.stdout.write('Ei sessioita — sammutetaan Cloud SQL.')
+        self.stdout.write(f"Aktiivisia sessioita: {active}")
+
+        if active > 0:
+            self.stdout.write("Sessioita käynnissä \u2014 DB pysyy päällä.")
+            return
+
+        self.stdout.write("Ei sessioita \u2014 sammutetaan Cloud SQL.")
         try:
-            creds, _ = google.auth.default()
-            service = googleapiclient.discovery.build(
-                'sqladmin', 'v1beta4', credentials=creds,
-                cache_discovery=False
-            )
-            service.instances().patch(
-                project=settings.GCP_PROJECT_ID,
-                instance=settings.CLOUD_SQL_INSTANCE_NAME,
-                body={'settings': {'activationPolicy': 'NEVER'}}
-            ).execute()
-            self.stdout.write(self.style.SUCCESS('Cloud SQL sammutettu.'))
+            set_activation_policy("NEVER")
+            _mark_db_not_ready()  # nollataan middleware-tila saman containerin säikeitä varten
+            self.stdout.write(self.style.SUCCESS("Cloud SQL sammutettu."))
         except Exception as exc:
-            self.stdout.write(self.style.ERROR(f'Sammutus epäonnistui: {exc}'))
+            self.stdout.write(self.style.ERROR(f"Sammutus epäonnistui: {exc}"))
             raise
