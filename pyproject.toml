@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "froide-scheduler"
+version = "0.2.0"
+description = "Cloud SQL wakeup/shutdown automation and SSO helpers for Froide on Google Cloud"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Jaakko Korhonen", email = "jaakko.korhonen@gmail.com" }
+]
+keywords = ["django", "cloud-sql", "gcp", "froide", "sso"]
+
+dependencies = [
+  "Django>=4.2",
+  "google-auth>=2.0",
+  "google-api-python-client>=2.0",
+  "django-allauth>=0.63",
+]
+
+[tool.setuptools.packages.find]
+include = ["froide_scheduler*"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
